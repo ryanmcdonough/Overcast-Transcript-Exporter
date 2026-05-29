@@ -1,71 +1,50 @@
 # Overcast Transcript Exporter
 
-Exports transcript text files for episodes in your current Overcast feed (macOS app DB), with configurable date window, limits, and file deduping.
+Exports transcript text files from Overcast on macOS.
 
-## Files
+## Workaround implemented
 
-- `overcast_export_transcripts.sh` - main export script
-- `.env.example` - optional config file template
+Overcast TestFlight transcript content is available on-device in SQLite blobs:
 
-## How DB detection works
+- `OCEpisode.generatedTranscriptData`
+- `OCEpisode.externalTranscriptData`
 
-- The script auto-detects your Overcast `db.sqlite` by scanning `~/Library/Containers/*/Data/Documents/db.sqlite`.
-- It verifies the matching container by checking for `Library/Preferences/fm.overcast.overcast.plist`.
-- This is fast local filesystem work and usually completes in a moment.
-- You can always override with `--db` or `DB=...`.
+These blobs are raw DEFLATE payloads. This exporter now decodes them directly, so you can extract transcript text even when `transcriptURL` is empty.
 
-## Quick start
+## Default behavior
 
-```bash
-cd /Users/ryanmcdonough/Desktop/overcast-transcript-exporter
-bash ./overcast_export_transcripts.sh
-```
+By default, the script does this:
 
-## Configure via flags
+- subscribed podcasts only
+- episodes still in feed only
+- on-device downloaded episodes only (`downloadState = 1`)
+- last 14 days
+- no hard max (`MAX=0` means unlimited)
+- skip existing files
+- decode on-device blobs first
+- fallback to `transcriptURL` only if blob decode is unavailable
 
-```bash
-bash ./overcast_export_transcripts.sh --days 7 --max 50 --skip-existing 1
-```
-
-## Configure via environment variables
-
-```bash
-export DAYS=7
-export MAX=50
-export SKIP_EXISTING=1
-bash ./overcast_export_transcripts.sh
-```
-
-## Optional: use a local .env file
+## Run
 
 ```bash
 cd /Users/ryanmcdonough/Desktop/overcast-transcript-exporter
-cp .env.example .env
-# edit values in .env
-set -a; source ./.env; set +a
-bash ./overcast_export_transcripts.sh
+./overcast_export_transcripts.sh
 ```
 
-## Helpful options
+## Useful options
 
-- `--days N` look back N days
-- `--max N` max number of episodes
-- `--include-deleted 0|1` include/exclude locally deleted episodes
-- `--skip-existing 0|1` skip already-downloaded transcript files
-- `--dry-run 0|1` preview without downloading
-- `--curl-max-time N` per-file timeout (seconds)
-- `--curl-retries N` retries on transient download errors
-- `--out PATH` output folder override
-- `--db PATH` database path override
-
-## Hardening notes
-
-- Validates all numeric/boolean config values before execution.
-- Uses atomic writes (`.part` then move) to avoid partial output files.
-- Includes episode ID in filename to avoid collisions between similarly titled episodes.
-- Supports configurable retry/timeout behavior for network reliability.
+- `--days N`
+- `--max N` (`0` = no limit)
+- `--on-device-only 0|1`
+- `--include-deleted 0|1`
+- `--skip-existing 0|1`
+- `--dry-run 0|1`
+- `--use-device-blobs 0|1`
+- `--allow-url-fallback 0|1`
+- `--db PATH`
+- `--out PATH`
 
 ## Notes
 
-- Script only exports episodes with a non-null `transcriptURL`.
-- Output files are named: `Podcast - Episode - YYYY-MM-DD [episodeID].txt`.
+- Filename format: `Podcast - Episode - YYYY-MM-DD [episodeID].txt`
+- If no blob and no usable URL, episode is reported as unavailable.
